@@ -420,20 +420,59 @@ function scrollCell(){
 let wake=null;
 async function requestWake(){try{wake=await navigator.wakeLock.request('screen')}catch(e){}}
 function releaseWake(){try{if(wake)wake.release()}catch(e){} wake=null}
-function renderStage(scroll){
+/* tryb sceniczny = przewijana „kartka”; powiększenie zapamiętane na tym urządzeniu */
+const ZOOM_LS='musicnotes.stageZoom', ZMIN=0.3, ZMAX=2.5;
+const ZSTEPS=[0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1,1.25,1.4,1.6,1.8,2,2.25,2.5];
+let stZoom={z:1,fit:false};
+try{const v=JSON.parse(localStorage.getItem(ZOOM_LS));if(v&&v.z>=ZMIN&&v.z<=ZMAX)stZoom={z:+v.z,fit:!!v.fit}}catch(e){}
+function saveZoom(){try{localStorage.setItem(ZOOM_LS,JSON.stringify(stZoom))}catch(e){}}
+function applyZoom(){
+  const p=document.querySelector('.st-paper'), l=document.querySelector('.st-label-z');
+  if(p) p.style.zoom=stZoom.z;
+  if(l) l.textContent=Math.round(stZoom.z*100)+'%';
+}
+/* dobiera powiększenie tak, żeby cała forma zmieściła się na ekranie (tekst przy innym rozmiarze inaczej się łamie, więc szukamy wielokrotnie) */
+function fitStage(){
+  const sc=document.querySelector('.st-list'), p=document.querySelector('.st-paper'); if(!sc||!p) return;
+  const fits=()=>sc.scrollHeight<=sc.clientHeight+1&&sc.scrollWidth<=sc.clientWidth+1;
+  let lo=ZMIN, hi=ZMAX;
+  for(let k=0;k<14;k++){const m=(lo+hi)/2; p.style.zoom=m; if(fits()) lo=m; else hi=m}
+  stZoom.z=Math.floor(lo*100)/100; applyZoom(); sc.scrollTop=0;
+}
+function zoomStep(dir){
+  const z=stZoom.z;
+  const next=dir>0?ZSTEPS.find(s=>s>z+0.001):[...ZSTEPS].reverse().find(s=>s<z-0.001);
+  stZoom={z:next??z,fit:false}; saveZoom(); renderStage();
+}
+function renderStage(){
   const host=$('#stage'), song=cur();
   if(ui.stage==null||!song){host.hidden=true;host.innerHTML='';return}
+  const prev=host.querySelector('.st-list'), top=prev?prev.scrollTop:0;
   host.hidden=false;
-  host.innerHTML=`<header class="st-head"><div><h2>${esc(song.title)}</h2><p>${song.bpm} BPM</p></div><button class="btn" data-act="stage-close">Zamknij</button></header>
-  <ol class="st-list">${song.arrangement.map((a,i)=>{const s=secOf(song,a.sid);if(!s)return '';return `<li class="st-item sc-${s.color} ${i===ui.stage?'cur':''}" data-act="stage-go" data-i="${i}">
-    <div class="st-label"><b>${esc(s.short)}</b><span>${esc(s.name)}</span>${a.rep>1?`<em>×${a.rep}</em>`:''}</div>
+  const hasRep=song.arrangement.some(a=>a.rep>1);
+  host.innerHTML=`<header class="st-head"><div class="st-title"><h2>${esc(song.title)}</h2><p>${song.bpm} BPM</p></div>
+    <div class="st-tools">
+      <span class="seg-group" role="group" aria-label="Powiększenie">
+        <button class="btn small mono" data-act="st-zoom" data-dir="-1" ${stZoom.z<=ZMIN?'disabled':''} aria-label="Pomniejsz">−</button>
+        <span class="mid st-label-z" aria-live="polite"></span>
+        <button class="btn small mono" data-act="st-zoom" data-dir="1" ${stZoom.z>=ZMAX?'disabled':''} aria-label="Powiększ">+</button>
+      </span>
+      <button class="btn small ${stZoom.fit?'on-fit':''}" data-act="st-fit" aria-pressed="${stZoom.fit}">Zmieść wszystko</button>
+      <button class="btn small" data-act="stage-close">Zamknij</button>
+    </div></header>
+  <div class="st-list" tabindex="-1"><ol class="st-paper ${hasRep?'has-rep':''}">${song.arrangement.map(a=>{const s=secOf(song,a.sid);if(!s)return '';const r=a.rep>1;return `<li class="st-item sc-${s.color} ${r?'rep':''}">
+    <div class="st-label"><b>${esc(s.short)}</b><span>${esc(s.name)}</span></div>
     <div class="st-bars">${barCells(s).map(c=>c.type==='bar'
       ?`<span class="st-cell">${barInner(s.chords[c.i]||'')}</span>`
       :`<span class="st-cell st-text" style="grid-column:span ${c.to-c.from}">${c.first?'':'… '}${esc(c.t)}</span>`).join('')}</div>
-    ${s.lyrics?`<p class="st-lyr">${esc(s.lyrics)}</p>`:''}</li>`}).join('')}</ol>
-  <footer class="st-foot"><button class="btn" data-act="stage-prev" ${ui.stage===0?'disabled':''}>‹ Poprzednia</button><span>${ui.stage+1} / ${song.arrangement.length}</span><button class="btn primary" data-act="stage-next" ${ui.stage>=song.arrangement.length-1?'disabled':''}>Następna ›</button></footer>`;
-  if(scroll!==false){const c=host.querySelector('.st-item.cur');if(c)c.scrollIntoView({block:'center',behavior:scroll==='jump'?'auto':SMOOTH})}
+    ${r?`<div class="st-rep" aria-label="zagraj ${a.rep} razy">×${a.rep}</div>`:''}
+    ${s.lyrics?`<p class="st-lyr">${esc(s.lyrics)}</p>`:''}</li>`}).join('')}</ol></div>`;
+  applyZoom();
+  const sc=host.querySelector('.st-list');
+  if(stZoom.fit) fitStage(); else sc.scrollTop=top;
+  if(!prev) sc.focus({preventScroll:true}); // strzałki/PageDown/pedał przewijają kartkę
 }
+window.addEventListener('resize',()=>{if(ui.stage!=null&&stZoom.fit) fitStage()});
 
 function renderText(){
   const host=$('#textSheet');
@@ -489,11 +528,10 @@ document.addEventListener('click',e=>{
     case 'new-song': {const s=newSong(); state.songs.unshift(s); state.currentId=s.id; ui.sel=null; ui.confirm=null; ui.search=''; $('#f-search').value=''; ui.pane='editor'; commit(); $('#main').scrollTop=0; const ti=$('#f-title'); ti.focus(); ti.select(); break;}
     case 'back': ui.pane='list'; ui.keypad=null; renderAll(); break;
     case 'copy': copyText(songText(song)); break;
-    case 'stage': ui.stage=ui.sel??0; renderStage('jump'); requestWake(); break;
+    case 'stage': ui.stage=true; renderStage(); requestWake(); break;
     case 'stage-close': ui.stage=null; renderStage(); releaseWake(); break;
-    case 'stage-next': ui.stage=Math.min(arr.length-1,ui.stage+1); renderStage(); break;
-    case 'stage-prev': ui.stage=Math.max(0,ui.stage-1); renderStage(); break;
-    case 'stage-go': ui.stage=+d.i; renderStage(); break;
+    case 'st-zoom': zoomStep(+d.dir); break;
+    case 'st-fit': stZoom.fit=!stZoom.fit; saveZoom(); renderStage(); break;
     case 'del-song': ui.confirm='song'; renderAll(); break;
     case 'del-sec': ui.confirm='sec:'+d.sid; renderEditor(); break;
     case 'cancel-confirm': ui.confirm=null; renderAll(); break;
@@ -602,10 +640,13 @@ document.addEventListener('keydown',e=>{
   }
   if(ui.text!=null&&e.key==='Escape'){ui.text=null;renderText();return}
   if(ui.stage!=null){
-    const n=cur().arrangement.length;
+    // pedał / klawiatura: przewijanie kartki o ~ekran, +/- powiększenie
+    const sc=document.querySelector('.st-list'), page=sc?sc.clientHeight*0.85:0;
     if(e.key==='Escape'){ui.stage=null;renderStage();releaseWake()}
-    else if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown'){e.preventDefault();ui.stage=Math.min(n-1,ui.stage+1);renderStage()}
-    else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();ui.stage=Math.max(0,ui.stage-1);renderStage()}
+    else if(['ArrowRight','ArrowDown','PageDown',' '].includes(e.key)&&sc){e.preventDefault();sc.scrollBy({top:page,behavior:SMOOTH})}
+    else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)&&sc){e.preventDefault();sc.scrollBy({top:-page,behavior:SMOOTH})}
+    else if(e.key==='+'||e.key==='='){e.preventDefault();zoomStep(1)}
+    else if(e.key==='-'){e.preventDefault();zoomStep(-1)}
     return;
   }
   const chip=e.target.closest&&e.target.closest('.chip');
@@ -618,7 +659,7 @@ function toggleSel(idx){ui.sel=ui.sel===idx?null:idx;ui.confirm=null;renderEdito
 function arm(){
   drag.armed=true; drag.el.classList.add('lifted');
   const r=drag.el.getBoundingClientRect();
-  ghost=drag.el.cloneNode(true); ghost.classList.add('ghost'); ghost.classList.remove('sel','lifted');
+  ghost=drag.el.cloneNode(true); ghost.classList.add('drag-ghost'); ghost.classList.remove('sel','lifted');
   ghost.style.width=r.width+'px'; ghost.style.height=r.height+'px';
   document.body.appendChild(ghost); posGhost(drag.x,drag.y);
   try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}
