@@ -277,6 +277,7 @@ function renderEditor(){
       </div>
       <div class="actions">
         <button class="btn" data-act="copy">Kopiuj jako tekst</button>
+        <button class="btn" data-act="pdf" ${song.arrangement.length?'':'disabled'}>Eksportuj PDF</button>
         <button class="btn primary" data-act="stage" ${song.arrangement.length?'':'disabled'}>Tryb sceniczny</button>
       </div>
     </header>
@@ -444,12 +445,49 @@ function zoomStep(dir){
   const next=dir>0?ZSTEPS.find(s=>s>z+0.001):[...ZSTEPS].reverse().find(s=>s<z-0.001);
   stZoom={z:next??z,fit:false}; saveZoom(); renderStage();
 }
+/* „kartka” z formą – ta sama w trybie scenicznym i w PDF */
+function paperHTML(song){
+  const hasRep=song.arrangement.some(a=>a.rep>1);
+  return `<ol class="st-paper ${hasRep?'has-rep':''}">${song.arrangement.map(a=>{const s=secOf(song,a.sid);if(!s)return '';const r=a.rep>1;return `<li class="st-item sc-${s.color} ${r?'rep':''}">
+    <div class="st-label"><b>${esc(s.short)}</b><span>${esc(s.name)}</span></div>
+    <div class="st-bars">${barCells(s).map(c=>c.type==='bar'
+      ?`<span class="st-cell">${barInner(s.chords[c.i]||'')}</span>`
+      :`<span class="st-cell st-text" style="grid-column:span ${c.to-c.from}">${c.first?'':'… '}${esc(c.t)}</span>`).join('')}</div>
+    ${r?`<div class="st-rep" aria-label="zagraj ${a.rep} razy">×${a.rep}</div>`:''}
+    ${s.lyrics?`<p class="st-lyr">${esc(s.lyrics)}</p>`:''}</li>`}).join('')}</ol>`;
+}
+
+/* PDF: arkusz A4 (bez marginesów 10 mm: 190×277 mm) dopasowany jak „Zmieść wszystko”, potem okno drukowania → „Zapisz jako PDF” */
+const MM=96/25.4, SHEET_W=Math.floor(190*MM), SHEET_H=Math.floor(277*MM)-8;
+function exportPDF(song){
+  let sh=$('#printSheet');
+  if(!sh){sh=document.createElement('div');sh.id='printSheet';document.body.appendChild(sh)}
+  sh.className='print-sheet measuring';
+  sh.style.width=SHEET_W+'px'; sh.style.height=SHEET_H+'px';
+  const bars=songBars(song);
+  sh.innerHTML=`<header class="ps-head"><h1>${esc(song.title||'Bez tytułu')}</h1>
+      <p>${song.bpm} BPM · ${bars} ${plTakt(bars)} · ${esc(song.arrangement.map(a=>{const s=secOf(song,a.sid);return s?s.short+(a.rep>1?'×'+a.rep:''):''}).join(' '))}</p></header>
+    <div class="ps-body">${paperHTML(song)}</div>
+    ${song.notes?`<p class="ps-notes">${esc(song.notes)}</p>`:''}`;
+  const box=sh.querySelector('.ps-body'), p=box.querySelector('.st-paper');
+  const fits=()=>box.scrollHeight<=box.clientHeight+1&&box.scrollWidth<=box.clientWidth+1;
+  let lo=0.2, hi=1.6;
+  for(let k=0;k<14;k++){const m=(lo+hi)/2; p.style.zoom=m; if(fits()) lo=m; else hi=m}
+  p.style.zoom=Math.floor(lo*100)/100;
+  sh.classList.remove('measuring');
+  const oldTitle=document.title;
+  document.title=(song.title||'piosenka').replace(/[\\/:*?"<>|]+/g,' ').trim(); // nazwa pliku PDF
+  // arkusz zostaje w DOM (na ekranie ukryty) – na Androidzie podgląd wydruku powstaje już po afterprint
+  const done=()=>{removeEventListener('afterprint',done);setTimeout(()=>{document.title=oldTitle},3000)};
+  addEventListener('afterprint',done);
+  setTimeout(()=>window.print(),50);
+}
+
 function renderStage(){
   const host=$('#stage'), song=cur();
   if(ui.stage==null||!song){host.hidden=true;host.innerHTML='';return}
   const prev=host.querySelector('.st-list'), top=prev?prev.scrollTop:0;
   host.hidden=false;
-  const hasRep=song.arrangement.some(a=>a.rep>1);
   host.innerHTML=`<header class="st-head"><div class="st-title"><h2>${esc(song.title)}</h2><p>${song.bpm} BPM</p></div>
     <div class="st-tools">
       <span class="seg-group" role="group" aria-label="Powiększenie">
@@ -460,13 +498,7 @@ function renderStage(){
       <button class="btn small ${stZoom.fit?'on-fit':''}" data-act="st-fit" aria-pressed="${stZoom.fit}">Zmieść wszystko</button>
       <button class="btn small" data-act="stage-close">Zamknij</button>
     </div></header>
-  <div class="st-list" tabindex="-1"><ol class="st-paper ${hasRep?'has-rep':''}">${song.arrangement.map(a=>{const s=secOf(song,a.sid);if(!s)return '';const r=a.rep>1;return `<li class="st-item sc-${s.color} ${r?'rep':''}">
-    <div class="st-label"><b>${esc(s.short)}</b><span>${esc(s.name)}</span></div>
-    <div class="st-bars">${barCells(s).map(c=>c.type==='bar'
-      ?`<span class="st-cell">${barInner(s.chords[c.i]||'')}</span>`
-      :`<span class="st-cell st-text" style="grid-column:span ${c.to-c.from}">${c.first?'':'… '}${esc(c.t)}</span>`).join('')}</div>
-    ${r?`<div class="st-rep" aria-label="zagraj ${a.rep} razy">×${a.rep}</div>`:''}
-    ${s.lyrics?`<p class="st-lyr">${esc(s.lyrics)}</p>`:''}</li>`}).join('')}</ol></div>`;
+  <div class="st-list" tabindex="-1">${paperHTML(song)}</div>`;
   applyZoom();
   const sc=host.querySelector('.st-list');
   if(stZoom.fit) fitStage(); else sc.scrollTop=top;
@@ -528,6 +560,7 @@ document.addEventListener('click',e=>{
     case 'new-song': {const s=newSong(); state.songs.unshift(s); state.currentId=s.id; ui.sel=null; ui.confirm=null; ui.search=''; $('#f-search').value=''; ui.pane='editor'; commit(); $('#main').scrollTop=0; const ti=$('#f-title'); ti.focus(); ti.select(); break;}
     case 'back': ui.pane='list'; ui.keypad=null; renderAll(); break;
     case 'copy': copyText(songText(song)); break;
+    case 'pdf': exportPDF(song); break;
     case 'stage': ui.stage=true; renderStage(); requestWake(); break;
     case 'stage-close': ui.stage=null; renderStage(); releaseWake(); break;
     case 'st-zoom': zoomStep(+d.dir); break;

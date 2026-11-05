@@ -266,6 +266,32 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:v
 .st-text{font:italic 650 clamp(16px,2vw,22px) var(--f-body);color:var(--muted);background:repeating-linear-gradient(135deg,var(--panel) 0 7px,var(--surface) 7px 14px)}
 .st-lyr{margin:0;color:var(--muted);white-space:pre-wrap}
 
+/* --- PDF / wydruk: arkusz A4 zawsze w jasnych kolorach i układzie „tabletowym” --- */
+.print-sheet{
+  --bg:#fff; --panel:#F3F4F1; --surface:#fff; --ink:#191C21; --muted:#5D646E; --line:#C9CEC5;
+  --s0-bg:#D3ECE8; --s0-ink:#0F4F48; --s0-mk:#2A9D8F; --s1-bg:#D6E2FF; --s1-ink:#1C3A8A; --s1-mk:#3F6BE0;
+  --s2-bg:#FFE6B8; --s2-ink:#6E4300; --s2-mk:#E39B12; --s3-bg:#E7DBFF; --s3-ink:#4B2A8F; --s3-mk:#8657E0;
+  --s4-bg:#D9F0D0; --s4-ink:#2F5E1E; --s4-mk:#5BA03E; --s5-bg:#E2E4E8; --s5-ink:#3A3F4A; --s5-mk:#868D9A;
+  --s6-bg:#FFD9E2; --s6-ink:#8A1F45; --s6-mk:#E0507F; --s7-bg:#CFEFF7; --s7-ink:#0D5566; --s7-mk:#1FA3C2;
+  color-scheme:light; background:#fff; color:var(--ink); display:none; flex-direction:column; gap:10px; overflow:hidden;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact; font:15px/1.45 var(--f-body)
+}
+.print-sheet.measuring{display:flex;position:fixed;left:-10000px;top:0;visibility:hidden}
+.ps-head h1{font:780 28px/1.1 var(--f-display);margin:0;letter-spacing:-.02em}
+.ps-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.ps-body{flex:1;min-height:0;overflow:hidden}
+.ps-notes{margin:0;font-size:12px;color:var(--muted);white-space:pre-wrap;border-top:1px solid var(--line);padding-top:6px}
+.print-sheet .st-item{border-color:var(--line)}
+.print-sheet .st-item.rep{border-color:var(--smk)}
+.print-sheet .st-cell{font-size:24px}
+.print-sheet .st-text{font-size:18px}
+@page{size:A4;margin:10mm}
+@media print{
+  html,body{height:auto;overflow:visible;background:#fff}
+  body>*:not(#printSheet){display:none!important}
+  #printSheet{display:flex!important;position:static;visibility:visible;break-inside:avoid}
+}
+
 .toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:650;z-index:80;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
 
 @media (max-width:760px){
@@ -279,9 +305,10 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:v
   .ed-inner{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:8px}
   .panel{padding:14px}
   .chip{width:76px;height:72px}
-  .st-item,.has-rep .st-item{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"label rep" "bars bars" "lyr lyr"}
-  .st-label b{min-width:44px;height:44px;font-size:20px}
-  .st-rep{height:44px;min-width:56px;font-size:22px}
+  /* tylko ekranowy tryb sceniczny – arkusz PDF ma zawsze układ szeroki */
+  .stage .st-item,.stage .has-rep .st-item{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"label rep" "bars bars" "lyr lyr"}
+  .stage .st-label b{min-width:44px;height:44px;font-size:20px}
+  .stage .st-rep{height:44px;min-width:56px;font-size:22px}
 }
 @media (max-width:480px){
   .k-grid.mods{grid-template-columns:repeat(5,minmax(0,1fr))}
