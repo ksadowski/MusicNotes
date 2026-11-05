@@ -52,6 +52,8 @@
 .sc-6{--sbg:var(--s6-bg);--sink:var(--s6-ink);--smk:var(--s6-mk)}
 .sc-7{--sbg:var(--s7-bg);--sink:var(--s7-ink);--smk:var(--s7-mk)}
 
+/* atrybut hidden musi wygrać z display:grid/flex z klas (np. .stage) – inaczej ukryta warstwa zasłania ekran */
+[hidden]{display:none!important}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);overflow:hidden;-webkit-tap-highlight-color:transparent}
