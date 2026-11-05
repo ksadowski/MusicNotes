@@ -320,6 +320,10 @@ function renderEditor(){
 }
 
 const MODS=[['#','♯'],['b','♭'],['m','m'],['7','7'],['maj7','maj7'],['m7','m7'],['sus2','sus2'],['sus4','sus4'],['dim','dim'],['aug','aug'],['6','6'],['9','9'],['add9','add9'],['5','5']];
+/* schowek taktu – zapamiętany na urządzeniu, działa między sekcjami i piosenkami */
+const CLIP_LS='musicnotes.barClip';
+let clip=''; try{clip=localStorage.getItem(CLIP_LS)||''}catch(e){}
+const clipLabel=v=>getSlots(v).map(x=>x==='-'?'·':disp(x)).join(' ');
 function renderKeypad(){
   const host=$('#keypad'), kp=ui.keypad;
   $('#main').classList.toggle('kp-pad',!!kp);
@@ -346,6 +350,10 @@ function renderKeypad(){
         return `<button class="k-slot ${j===kp.slot?'on':''} ${kp.fresh&&j===kp.slot&&has?'fresh':''}" data-act="k-slot" data-v="${j}" aria-label="Część ${j+1}">${sl.length>1?`<small>${j+1}</small>`:''}${has?esc(disp(x)):`<span class="bar-empty">${sl.length>1?'·':'pusty takt'}</span>`}</button>`}).join('')}</div>
     <div class="k-grid roots">${['C','D','E','F','G','A','B'].map(r=>`<button class="k root" data-act="k" data-v="${r}">${disp(r)}</button>`).join('')}</div>
     <div class="k-grid mods">${MODS.map(([v,l])=>`<button class="k" data-act="k" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="k-grid clip">
+      <button class="k wide" data-act="k-copy" ${s.chords[kp.i]?'':'disabled'}>Kopiuj takt</button>
+      <button class="k wide" data-act="k-paste" ${clip?'':'disabled'} title="Wkleja skopiowany takt i przechodzi do następnego">${clip?`Wklej <b class="mono">${esc(clipLabel(clip))}</b> ›`:'Wklej ›'}</button>
+    </div>
     <div class="k-grid acts">
       <button class="k wide" data-act="k" data-v="/">/ bas</button>
       <button class="k wide" data-act="k" data-v="%">% jak wyżej</button>
@@ -590,6 +598,11 @@ document.addEventListener('click',e=>{
     case 'cell': ui.keypad=openAt(d.sid,+d.i); renderEditor(); renderKeypad(); scrollCell(); break;
     case 'k': kpPress(d.v); break;
     case 'k-back': ui.keypad.fresh=false; slotEdit(x=>{const t=x.match(TOK)||[]; if(t.join('')===x){t.pop(); return t.join('')} return x.slice(0,-1)}); break;
+    case 'k-copy': {const v=secOf(song,ui.keypad.sid).chords[ui.keypad.i]||''; if(!v) break;
+      clip=v; try{localStorage.setItem(CLIP_LS,v)}catch(e){} renderKeypad(); toast('Skopiowano takt: '+clipLabel(v)); break;}
+    case 'k-paste': {const kp=ui.keypad, s=secOf(song,kp.sid); if(!clip) break;
+      s.chords[kp.i]=clip; kp.fresh=true; kp.slot=0;
+      if(kp.i<s.bars-1&&textAt(s,kp.i+1)==null) kpGo(1); else kpSync(); renderList(); break;}
     case 'k-clear': ui.keypad.fresh=false; ui.keypad.slot=0; kpEdit(()=>''); break;
     case 'k-div': {const n=+d.v; ui.keypad.fresh=false;
       kpEdit(v=>{let sl=getSlots(v); if(sl[0]==='%') sl=['']; while(sl.length<n) sl.push('-'); return joinSlots(sl.slice(0,n))});

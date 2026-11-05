@@ -220,6 +220,9 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:v
 .k-grid.roots{grid-template-columns:repeat(7,minmax(0,1fr))}
 .k-grid.mods{grid-template-columns:repeat(7,minmax(0,1fr))}
 .k-grid.acts{grid-template-columns:repeat(3,minmax(0,1fr))}
+.k-grid.clip{grid-template-columns:repeat(2,minmax(0,1fr))}
+.k-grid.clip .k b{font-weight:700;margin:0 2px}
+.k:disabled{opacity:.4;cursor:default}
 .k{min-height:48px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font:650 15px var(--f-mono);cursor:pointer;padding:0 4px}
 .k:hover{border-color:var(--muted)}
 .k.root{font:800 21px var(--f-display);background:var(--surface)}
