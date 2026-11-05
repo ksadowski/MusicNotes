@@ -2,10 +2,10 @@
    Uprawnienie drive.file – aplikacja widzi tylko pliki, które sama utworzyła. Plik jest widoczny na Dysku. */
 import { GOOGLE_CLIENT_ID } from './config.js';
 
-export const SYNC_FILE = 'notatnik-form-synchronizacja.json';
+export const SYNC_FILE = 'musicnotes-sync.json';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const TOKEN_LS = 'notatnik-form.gtoken';
-const CONSENT_LS = 'notatnik-form.gconsent';
+const TOKEN_LS = 'musicnotes.gtoken';
+const CONSENT_LS = 'musicnotes.gconsent';
 const API = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 
@@ -96,7 +96,7 @@ export async function readFile(id) {
 
 export async function createFile(data) {
   const boundary = 'nf' + Math.random().toString(36).slice(2);
-  const meta = { name: SYNC_FILE, mimeType: 'application/json', description: 'Dane aplikacji Notatnik form. Nie edytuj ręcznie.' };
+  const meta = { name: SYNC_FILE, mimeType: 'application/json', description: 'Dane aplikacji MusicNotes. Nie edytuj ręcznie.' };
   const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
     `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--`;
   const r = await call(`${UPLOAD}?uploadType=multipart&fields=id`, {

@@ -52,5 +52,5 @@ export function mergeData(local, remote) {
   return { songs, deleted };
 }
 
-export const payloadOf = st => ({ app: 'notatnik-form', version: 2, songs: st.songs, deleted: st.deleted || {} });
+export const payloadOf = st => ({ app: 'musicnotes', version: 2, songs: st.songs, deleted: st.deleted || {} });
 export const samePayload = (a, b) => JSON.stringify(a.songs) === JSON.stringify(b.songs) && JSON.stringify(a.deleted || {}) === JSON.stringify(b.deleted || {});

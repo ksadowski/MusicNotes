@@ -1,12 +1,12 @@
 /* Kopia zapasowa: eksport wszystkich piosenek do pliku JSON i import z pliku. */
 
-export const BACKUP_APP = 'notatnik-form';
+export const BACKUP_APP = 'musicnotes';
 
 export function exportFile(songs) {
   const data = { app: BACKUP_APP, version: 1, exported: new Date().toISOString(), songs };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const d = new Date(), p = n => String(n).padStart(2, '0');
-  const name = `notatnik-form-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
+  const name = `musicnotes-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = name;

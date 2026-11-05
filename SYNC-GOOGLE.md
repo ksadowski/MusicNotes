@@ -1,6 +1,6 @@
 # Synchronizacja z Dyskiem Google — konfiguracja (jednorazowo)
 
-Aplikacja zapisuje na Twoim Dysku jeden plik `notatnik-form-synchronizacja.json`. Dostaje uprawnienie
+Aplikacja zapisuje na Twoim Dysku jeden plik `musicnotes-sync.json`. Dostaje uprawnienie
 `drive.file`, czyli widzi **tylko pliki, które sama utworzyła** — reszty Dysku nie widzi.
 Żeby to działało, Google musi „znać” aplikację. Służy do tego identyfikator klienta (Client ID), który
 wyrabia się raz, za darmo, w Google Cloud.
@@ -8,10 +8,10 @@ wyrabia się raz, za darmo, w Google Cloud.
 ## Kroki
 
 1. Wejdź na https://console.cloud.google.com i zaloguj się swoim kontem Google.
-2. U góry wybierz projekt → **Nowy projekt** → nazwa np. `Notatnik form` → Utwórz.
+2. U góry wybierz projekt → **Nowy projekt** → nazwa np. `MusicNotes` → Utwórz.
 3. **Włącz Google Drive API**: menu → *Interfejsy API i usługi* → *Biblioteka* → wyszukaj „Google Drive API” → **Włącz**.
 4. **Ekran zgody**: menu → *Google Auth Platform* (albo *Ekran zgody OAuth*) → **Rozpocznij**:
-   - nazwa aplikacji: `Notatnik form`, e-mail pomocy: Twój,
+   - nazwa aplikacji: `MusicNotes`, e-mail pomocy: Twój,
    - odbiorcy: **Zewnętrzni**,
    - e-mail kontaktowy: Twój → zaakceptuj zasady → Utwórz.
 5. *Odbiorcy* (Audience) → **Użytkownicy testowi** → dodaj swój adres Gmail

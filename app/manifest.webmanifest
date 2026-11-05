@@ -1,6 +1,6 @@
 {
-  "name": "Notatnik form",
-  "short_name": "Formy",
+  "name": "MusicNotes",
+  "short_name": "MusicNotes",
   "description": "Szybkie zapisywanie formy piosenek: sekcje, akordy, powtórzenia, tryb sceniczny.",
   "lang": "pl",
   "id": "./",

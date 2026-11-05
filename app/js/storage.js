@@ -1,11 +1,11 @@
 /* Zapis danych: IndexedDB (jeden rekord ze stanem), awaryjnie localStorage.
    Zapis jest odkładany o chwilę, żeby nie pisać na każdy wciśnięty klawisz. */
 
-const DB_NAME = 'notatnik-form';
+const DB_NAME = 'musicnotes';
 const STORE = 'kv';
 const KEY = 'state';
 const LEGACY_LS = 'notatnik-form.v1'; // localStorage z prototypu
-const FALLBACK_LS = 'notatnik-form.state';
+const FALLBACK_LS = 'musicnotes.state';
 
 let dbp = null;
 function openDB() {
