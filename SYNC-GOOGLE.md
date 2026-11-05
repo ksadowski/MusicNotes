@@ -22,7 +22,10 @@ wyrabia się raz, za darmo, w Google Cloud.
    - **Autoryzowane źródła JavaScriptu** — dodaj dwa adresy (bez ukośnika na końcu):
      - `https://<twój-login>.github.io`
      - `http://localhost:8080`
-   - Identyfikatory URI przekierowania — zostaw puste → Utwórz.
+   - **Autoryzowane identyfikatory URI przekierowania** — dodaj dwa adresy (tu **z** ukośnikiem na końcu):
+     - `https://<twój-login>.github.io/MusicNotes/`
+     - `http://localhost:8080/`
+   - Utwórz / Zapisz. (Zmiana w Google działa po kilku minutach.)
 8. Skopiuj **Identyfikator klienta** (kończy się na `.apps.googleusercontent.com`) i wpisz go w
    `app/js/config.js` w miejsce `''` — albo po prostu wklej go Claude'owi.
 9. Zrób commit i push (GitHub Desktop) — po publikacji w stopce aplikacji pojawi się **Połącz z Dyskiem Google**.

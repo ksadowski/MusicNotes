@@ -1,4 +1,4 @@
-import {loadState,scheduleSave,requestPersist} from './storage.js';
+import {loadState,scheduleSave,requestPersist,flush} from './storage.js';
 import {exportFile,readBackup,mergeSongs} from './backup.js';
 import {createTracker,mergeData,payloadOf,samePayload} from './sync.js';
 import * as gd from './gdrive.js';
@@ -41,6 +41,14 @@ function save(){
 const ui={sel:null,pane:'list',search:'',confirm:null,keypad:null,stage:null,text:null,
   persisted:null,importing:null,install:null,update:null,
   sync:{busy:false,error:null,needAuth:false}};
+
+/* powrót z logowania Google (token w adresie) – przed jakąkolwiek zmianą historii */
+const authReturn=gd.enabled()?gd.handleRedirect():null;
+if(authReturn&&!authReturn.ok){
+  ui.sync.error=authReturn.error;
+  if(state.sync&&!state.sync.last&&!state.sync.fileId) state.sync.on=false;
+  else ui.sync.needAuth=true;
+}
 const cur=()=>state.songs.find(s=>s.id===state.currentId);
 const secOf=(song,sid)=>song.sections.find(s=>s.id===sid);
 
@@ -103,10 +111,12 @@ async function runSync(interactive){
   if(!navigator.onLine){renderFoot();return}
   if(!gd.hasToken()){
     if(!interactive){ui.sync.needAuth=true;renderFoot();return}
+    // logowanie = przejście do Google i powrót; najpierw zapisz wszystko
+    ui.sync.busy=true; renderFoot();
+    scheduleSave(state); await flush(); gd.signIn(); return;
   }
   syncing=true; clearTimeout(autoT);
   try{
-    if(!gd.hasToken()) await gd.signIn();
     ui.sync.busy=true; ui.sync.needAuth=false; renderFoot();
     let id=state.sync.fileId||await gd.findFile();
     let remote=id?await gd.readFile(id):null;
@@ -722,4 +732,4 @@ if(!cur()&&state.songs[0]) state.currentId=state.songs[0].id;
 if(!narrow.matches) ui.pane='editor';
 renderAll();
 syncNav();
-if(syncOn()){gd.preload();runSync(false)}
+if(syncOn()) runSync(false);

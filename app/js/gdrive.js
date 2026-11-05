@@ -1,4 +1,4 @@
-/* Dysk Google: logowanie (Google Identity Services, token na ~1 h) i jeden plik z danymi.
+/* Dysk Google: logowanie (przekierowanie OAuth, token na ~1 h) i jeden plik z danymi.
    Uprawnienie drive.file – aplikacja widzi tylko pliki, które sama utworzyła. Plik jest widoczny na Dysku. */
 import { GOOGLE_CLIENT_ID } from './config.js';
 
@@ -20,52 +20,58 @@ try {
 export const hasToken = () => !!token && token.exp > Date.now() + 30000;
 export function forgetToken() { token = null; try { localStorage.removeItem(TOKEN_LS); } catch (e) {} }
 
-let gisP = null;
-function loadGis() {
-  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
-  if (gisP) return gisP;
-  gisP = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => { gisP = null; reject(new Error('Nie udało się połączyć z Google. Sprawdź internet.')); };
-    document.head.appendChild(s);
-  });
-  return gisP;
-}
+/* Logowanie przez przekierowanie (OAuth 2.0, przepływ „token”): strona przechodzi do Google i wraca
+   z tokenem w adresie (#access_token=…). Bez okienek – okienka zawodzą w zainstalowanej PWA i potrafią
+   fałszywie zgłaszać „zamknięto okno”. Adres powrotu musi być wpisany w Google Cloud jako
+   „Autoryzowany identyfikator URI przekierowania”. */
+const STATE_SS = 'musicnotes.oauthState';
+const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 
-/** Wczytuje bibliotekę logowania wcześniej, żeby okno logowania otworzyło się od razu po stuknięciu. */
-export function preload() { if (enabled() && navigator.onLine) loadGis().catch(() => {}); }
+/** Adres powrotu = adres aplikacji bez index.html, np. https://ksadowski.github.io/MusicNotes/ */
+export const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/, '');
 
-/** Prosi o token. Musi być wywołane bezpośrednio po stuknięciu (otwiera okno Google). */
-export async function signIn() {
-  await loadGis();
+/** Przechodzi do Google. Strona zostaje opuszczona – dane trzeba zapisać wcześniej. */
+export function signIn() {
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  try { sessionStorage.setItem(STATE_SS, state); } catch (e) {}
   const consented = localStorage.getItem(CONSENT_LS) === '1';
-  return new Promise((resolve, reject) => {
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: SCOPE,
-      callback: r => {
-        if (r.error) return reject(new Error('Google odmówił dostępu: ' + r.error));
-        if (!google.accounts.oauth2.hasGrantedAllScopes(r, SCOPE)) {
-          try { localStorage.removeItem(CONSENT_LS); } catch (e) {}
-          return reject(new Error('Nie zaznaczono zgody na dostęp do Dysku. Spróbuj jeszcze raz i w oknie Google zaznacz pole przy „Dysk Google” (pliki utworzone przez tę aplikację).'));
-        }
-        token = { value: r.access_token, exp: Date.now() + (r.expires_in || 3600) * 1000 };
-        try { localStorage.setItem(TOKEN_LS, JSON.stringify(token)); localStorage.setItem(CONSENT_LS, '1'); } catch (e) {}
-        resolve();
-      },
-      error_callback: e => reject(new Error(e && e.type === 'popup_closed' ? 'Zamknięto okno logowania.' : 'Logowanie nie powiodło się.'))
-    });
-    client.requestAccessToken({ prompt: consented ? '' : 'consent' });
+  const p = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri(),
+    response_type: 'token',
+    scope: SCOPE,
+    include_granted_scopes: 'true',
+    state
   });
+  if (!consented) p.set('prompt', 'consent');
+  location.assign(`${AUTH_URL}?${p}`);
 }
 
-export async function signOut() {
+/** Wywołać na starcie, zanim ktokolwiek ruszy historię. Zwraca null (to nie powrót z Google),
+    {ok:true} albo {ok:false, error}. Czyści token z paska adresu. */
+export function handleRedirect() {
+  const h = location.hash;
+  if (!/[#&](access_token|error)=/.test(h)) return null;
+  const p = new URLSearchParams(h.slice(1));
+  history.replaceState(null, '', location.pathname + location.search);
+  let expected = null;
+  try { expected = sessionStorage.getItem(STATE_SS); sessionStorage.removeItem(STATE_SS); } catch (e) {}
+  if (!expected || p.get('state') !== expected) return { ok: false, error: 'Odpowiedź Google nie pasuje do logowania z tej karty. Spróbuj jeszcze raz.' };
+  if (p.get('error')) return { ok: false, error: p.get('error') === 'access_denied' ? 'Nie zgodzono się na dostęp do Dysku.' : 'Google odmówił dostępu: ' + p.get('error') };
+  const scopes = (p.get('scope') || '').split(' ');
+  if (!scopes.includes(SCOPE)) {
+    try { localStorage.removeItem(CONSENT_LS); } catch (e) {}
+    return { ok: false, error: 'Nie zaznaczono zgody na dostęp do Dysku. Spróbuj jeszcze raz i w oknie Google zaznacz pole przy Dysku Google.' };
+  }
+  token = { value: p.get('access_token'), exp: Date.now() + (parseInt(p.get('expires_in'), 10) || 3600) * 1000 };
+  try { localStorage.setItem(TOKEN_LS, JSON.stringify(token)); localStorage.setItem(CONSENT_LS, '1'); } catch (e) {}
+  return { ok: true };
+}
+
+export function signOut() {
   const t = token; forgetToken();
   try { localStorage.removeItem(CONSENT_LS); } catch (e) {}
-  if (t) try { await loadGis(); google.accounts.oauth2.revoke(t.value, () => {}); } catch (e) {}
+  if (t) fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(t.value), { method: 'POST', mode: 'no-cors' }).catch(() => {});
 }
 
 export class AuthError extends Error {}
