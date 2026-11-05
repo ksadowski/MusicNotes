@@ -48,7 +48,10 @@ export async function signIn() {
       scope: SCOPE,
       callback: r => {
         if (r.error) return reject(new Error('Google odmówił dostępu: ' + r.error));
-        if (!google.accounts.oauth2.hasGrantedAllScopes(r, SCOPE)) return reject(new Error('Bez zgody na dostęp do Dysku synchronizacja nie zadziała.'));
+        if (!google.accounts.oauth2.hasGrantedAllScopes(r, SCOPE)) {
+          try { localStorage.removeItem(CONSENT_LS); } catch (e) {}
+          return reject(new Error('Nie zaznaczono zgody na dostęp do Dysku. Spróbuj jeszcze raz i w oknie Google zaznacz pole przy „Dysk Google” (pliki utworzone przez tę aplikację).'));
+        }
         token = { value: r.access_token, exp: Date.now() + (r.expires_in || 3600) * 1000 };
         try { localStorage.setItem(TOKEN_LS, JSON.stringify(token)); localStorage.setItem(CONSENT_LS, '1'); } catch (e) {}
         resolve();
@@ -71,7 +74,13 @@ async function call(url, opts = {}) {
   if (!hasToken()) throw new AuthError('Trzeba ponownie zalogować się do Google.');
   const res = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token.value } });
   if (res.status === 401) { forgetToken(); throw new AuthError('Sesja Google wygasła. Zaloguj się ponownie.'); }
-  if (!res.ok) throw new Error(`Dysk Google: błąd ${res.status}`);
+  if (!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = (j.error && (j.error.message || j.error.status)) || ''; } catch (e) {}
+    if (res.status === 403 && /has not been used|is disabled|SERVICE_DISABLED/i.test(detail))
+      throw new Error('Google Drive API nie jest włączone w projekcie Google Cloud (Interfejsy API i usługi → Biblioteka → Google Drive API → Włącz). Po włączeniu odczekaj kilka minut.');
+    throw new Error(`Dysk Google: błąd ${res.status}${detail ? ' – ' + detail : ''}`);
+  }
   return res;
 }
 

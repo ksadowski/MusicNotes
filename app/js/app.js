@@ -76,8 +76,9 @@ function syncWhen(t){
 }
 function syncHTML(){
   if(!gd.enabled()) return '';
-  if(!syncOn()) return `<div class="sync-box"><span class="label">Dysk Google</span>
-    <p class="sb-note">Połącz, żeby piosenki były takie same na tablecie i telefonie.</p>
+  if(!syncOn()) return `<div class="sync-box ${ui.sync.error?'warn':''}"><span class="label">Dysk Google</span>
+    ${ui.sync.error?`<p class="sb-note sync-status" role="alert">Nie udało się połączyć: ${esc(ui.sync.error)}</p>`
+      :'<p class="sb-note">Połącz, żeby piosenki były takie same na tablecie i telefonie.</p>'}
     <button class="btn small" data-act="sync-connect">Połącz z Dyskiem Google</button></div>`;
   const s=ui.sync, last=state.sync.last;
   const status=s.busy?'Synchronizuję…'
@@ -127,7 +128,8 @@ async function runSync(interactive){
   }catch(e){
     if(e instanceof gd.AuthError) ui.sync.needAuth=true;
     else ui.sync.error=e.message;
-    if(interactive&&!state.sync.last&&!state.sync.fileId){state.sync.on=false;toast(e.message)}
+    if(interactive&&!state.sync.last&&!state.sync.fileId){state.sync.on=false;ui.sync.error=e.message}
+    console.warn('Synchronizacja:',e);
   }finally{
     syncing=false; ui.sync.busy=false; scheduleSave(state); renderFoot();
     if(syncAgain){syncAgain=false;runSync(false)}
