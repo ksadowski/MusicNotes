@@ -10,8 +10,8 @@ Aplikacja na tablet z Androidem (później też telefon) do szybkiego zapisywani
   - `sw.js` — service worker. `VERSION='__BUILD__'` podmienia workflow na skrót commita. Lokalnie (`__BUILD__`) pliki idą najpierw z sieci, po wdrożeniu najpierw z pamięci; nowa wersja pokazuje w stopce „Odśwież”. Nowy plik aplikacji trzeba dopisać do `APP_FILES`.
   - `manifest.webmanifest`, `icons/` (PNG generuje `tools/make-icons.ps1`).
   - Przycisk „wstecz” Androida: każda otwarta warstwa (edytor na wąskim ekranie, tryb sceniczny, klawiatura, tekst) to wpis w historii (`syncNav` w `app.js`).
-- Publikacja: `.github/workflows/pages.yml` wrzuca `app/` na GitHub Pages przy pushu na `main` (Settings → Pages → Source: GitHub Actions). Repozytorium jeszcze nie istnieje.
-- Lokalnie: `tools/serve.ps1` (serwer w PowerShellu — na komputerze nie ma Pythona, Node ani gita), konfiguracja `app` w `.claude/launch.json`. Pliki `.ps1` muszą być zapisane jako UTF-8 z BOM (PowerShell 5.1).
+- Publikacja: `.github/workflows/pages.yml` wrzuca `app/` na GitHub Pages przy pushu na `main` (Settings → Pages → Source: GitHub Actions). Lokalne repo gita istnieje (gałąź `main`); użytkownik publikuje/pushuje przez GitHub Desktop. Git CLI: `C:\Program Files\Git\cmd\git.exe` (może nie być w PATH starych powłok).
+- Lokalnie: `tools/serve.ps1` (serwer w PowerShellu — na komputerze nie ma Pythona ani Node), konfiguracja `app` w `.claude/launch.json`. Pliki `.ps1` muszą być zapisane jako UTF-8 z BOM (PowerShell 5.1).
 - Stary prototyp: `prototyp/index.html`, opublikowany jako https://claude.ai/artifact/U7giiyXSQ8Lt7CNfuYD5u5 — już nierozwijany, zmiany robimy w `app/`.
 
 ## Model danych (z prototypu)
