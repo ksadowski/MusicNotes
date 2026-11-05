@@ -1,5 +1,7 @@
 import {loadState,scheduleSave,requestPersist} from './storage.js';
 import {exportFile,readBackup,mergeSongs} from './backup.js';
+import {createTracker,mergeData,payloadOf,samePayload} from './sync.js';
+import * as gd from './gdrive.js';
 
 const $=s=>document.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,10);
@@ -29,10 +31,16 @@ function newSong(){
 let state=await loadState();
 if(!state||!Array.isArray(state.songs)) state={songs:[],currentId:null};
 state.songs.forEach(so=>so.sections.forEach(s=>{if(!s.texts||typeof s.texts!=='object')s.texts={}}));
-function save(){scheduleSave(state)}
+if(!state.deleted) state.deleted={};
+const tracker=createTracker(state);
+function save(){
+  if(tracker.mark()&&syncOn()) scheduleAutoSync();
+  scheduleSave(state);
+}
 
 const ui={sel:null,pane:'list',search:'',confirm:null,keypad:null,stage:null,text:null,
-  persisted:null,importing:null,install:null,update:null};
+  persisted:null,importing:null,install:null,update:null,
+  sync:{busy:false,error:null,needAuth:false}};
 const cur=()=>state.songs.find(s=>s.id===state.currentId);
 const secOf=(song,sid)=>song.sections.find(s=>s.id===sid);
 
@@ -60,6 +68,72 @@ function renderList(){
     :`<li class="list-empty">${state.songs.length?`Brak piosenek pasujących do „${esc(ui.search)}”.`:'Nie masz jeszcze żadnej piosenki.'}</li>`;
 }
 
+/* ---------- synchronizacja z Dyskiem Google ---------- */
+const syncOn=()=>gd.enabled()&&!!(state.sync&&state.sync.on);
+function syncWhen(t){
+  const d=new Date(t), now=new Date(), hm=d.toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
+  return d.toDateString()===now.toDateString()?'dziś '+hm:d.toLocaleDateString('pl-PL')+' '+hm;
+}
+function syncHTML(){
+  if(!gd.enabled()) return '';
+  if(!syncOn()) return `<div class="sync-box"><span class="label">Dysk Google</span>
+    <p class="sb-note">Połącz, żeby piosenki były takie same na tablecie i telefonie.</p>
+    <button class="btn small" data-act="sync-connect">Połącz z Dyskiem Google</button></div>`;
+  const s=ui.sync, last=state.sync.last;
+  const status=s.busy?'Synchronizuję…'
+    :!navigator.onLine?'Brak internetu. Zsynchronizuję po połączeniu.'
+    :s.needAuth?'Zaloguj się ponownie, żeby zsynchronizować.'
+    :s.error?esc(s.error)
+    :last?'Zsynchronizowano: '+syncWhen(last):'Jeszcze nie zsynchronizowano.';
+  return `<div class="sync-box ${s.error||s.needAuth?'warn':''}"><span class="label">Dysk Google</span>
+    <p class="sb-note sync-status" role="status">${status}</p>
+    <div class="foot-btns">
+      <button class="btn small ${s.needAuth?'primary':''}" data-act="sync-now" ${s.busy?'disabled':''}>${s.needAuth?'Zaloguj i synchronizuj':'Synchronizuj teraz'}</button>
+      <button class="btn small ghost" data-act="sync-off" ${s.busy?'disabled':''}>Odłącz</button>
+    </div></div>`;
+}
+
+let syncing=false, syncAgain=false, autoT=null;
+function scheduleAutoSync(){clearTimeout(autoT);autoT=setTimeout(()=>runSync(false),4000)}
+/** interactive=true tylko bezpośrednio po stuknięciu – wtedy wolno otworzyć okno logowania Google. */
+async function runSync(interactive){
+  if(!syncOn()) return;
+  if(syncing){syncAgain=true;return}
+  if(!navigator.onLine){renderFoot();return}
+  if(!gd.hasToken()){
+    if(!interactive){ui.sync.needAuth=true;renderFoot();return}
+  }
+  syncing=true; clearTimeout(autoT);
+  try{
+    if(!gd.hasToken()) await gd.signIn();
+    ui.sync.busy=true; ui.sync.needAuth=false; renderFoot();
+    let id=state.sync.fileId||await gd.findFile();
+    let remote=id?await gd.readFile(id):null;
+    if(id&&!remote){id=await gd.findFile();remote=id?await gd.readFile(id):null}
+    if(remote&&!Array.isArray(remote.songs)) remote=null;
+    // od tego miejsca do przypisania wszystko synchronicznie – edycje nie mogą się wcisnąć w środek
+    tracker.mark();
+    const local=payloadOf(state);
+    const merged=remote?mergeData(local,remote):{songs:local.songs,deleted:local.deleted};
+    if(!samePayload(merged,local)){
+      state.songs=merged.songs; state.deleted=merged.deleted; tracker.reset();
+      if(!cur()){state.currentId=state.songs[0]?state.songs[0].id:null;ui.sel=null;ui.keypad=null;ui.confirm=null}
+      renderAll();
+    }
+    const out=payloadOf(state);
+    if(!id) id=await gd.createFile(out);
+    else if(!samePayload(out,remote)) await gd.updateFile(id,out);
+    state.sync.fileId=id; state.sync.last=Date.now(); ui.sync.error=null;
+  }catch(e){
+    if(e instanceof gd.AuthError) ui.sync.needAuth=true;
+    else ui.sync.error=e.message;
+    if(interactive&&!state.sync.last&&!state.sync.fileId){state.sync.on=false;toast(e.message)}
+  }finally{
+    syncing=false; ui.sync.busy=false; scheduleSave(state); renderFoot();
+    if(syncAgain){syncAgain=false;runSync(false)}
+  }
+}
+
 function renderFoot(){
   const im=ui.importing, n=im&&im.songs.length;
   const last=state.lastExport?new Date(state.lastExport).toLocaleDateString('pl-PL'):null;
@@ -69,6 +143,7 @@ function renderFoot(){
       ${state.songs.length?`<button class="btn small primary" data-act="import-merge">Dodaj do obecnych</button><button class="btn small danger" data-act="import-replace">Zastąp wszystkie</button>`
         :`<button class="btn small primary" data-act="import-merge">Wczytaj</button>`}
       <button class="btn small ghost" data-act="import-cancel">Anuluj</button></div>`:''}
+    ${syncHTML()}
     <div class="foot-btns">
       <button class="btn small" data-act="export" ${state.songs.length?'':'disabled'}>Eksportuj kopię</button>
       <button class="btn small" data-act="import">Importuj kopię</button>
@@ -462,6 +537,9 @@ document.addEventListener('click',e=>{
       ui.importing=null; ui.sel=null; ui.keypad=null; ui.confirm=null; commit();
       toast(d.act==='import-replace'?`Zastąpiono piosenki (${n})`:`Wczytano piosenki (${n})`); break;}
     case 'install': {const p=ui.install; ui.install=null; renderFoot(); p.prompt(); break;}
+    case 'sync-connect': state.sync={on:true,fileId:null,last:null}; ui.sync={busy:false,error:null,needAuth:false}; runSync(true); break;
+    case 'sync-now': runSync(true); break;
+    case 'sync-off': state.sync={on:false,fileId:null,last:null}; ui.sync={busy:false,error:null,needAuth:false}; gd.signOut(); scheduleSave(state); renderFoot(); toast('Odłączono Dysk Google. Piosenki zostają na tym urządzeniu.'); break;
     case 'sw-update': if(ui.update) ui.update.postMessage('skip-waiting'); break;
   }
 });
@@ -633,7 +711,13 @@ if('serviceWorker' in navigator){
   }).catch(()=>{});
 }
 
+/* synchronizacja: przy starcie, po powrocie do aplikacji i po odzyskaniu internetu */
+window.addEventListener('online',()=>runSync(false));
+window.addEventListener('offline',renderFoot);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')runSync(false)});
+
 if(!cur()&&state.songs[0]) state.currentId=state.songs[0].id;
 if(!narrow.matches) ui.pane='editor';
 renderAll();
 syncNav();
+if(syncOn()){gd.preload();runSync(false)}

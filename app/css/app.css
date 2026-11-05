@@ -81,6 +81,8 @@ h1,h2{text-wrap:balance}
 .foot-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .foot-btns .btn{padding:0 6px}
 .foot-wide{grid-column:1/-1}
+.sync-box{display:grid;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.sync-box.warn .sync-status{color:var(--danger);font-weight:600}
 .foot-confirm,.foot-strip{padding:8px 10px;font-size:13px}
 .foot-confirm span,.foot-strip span{flex-basis:100%}
 .foot-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-radius:10px;background:var(--accent-soft);font-weight:600}

@@ -45,7 +45,7 @@ function normSong(so) {
     .filter(a => isObj(a) && ids.has(a.sid))
     .map(a => ({ sid: a.sid, rep: REPS.includes(+a.rep) ? +a.rep : 1 }));
   const bpm = parseInt(so.bpm, 10);
-  return { id: so.id, title: str(so.title, 'Bez tytułu'), bpm: bpm > 0 && bpm <= 400 ? bpm : 100, notes: str(so.notes), sections, arrangement };
+  return { id: so.id, title: str(so.title, 'Bez tytułu'), bpm: bpm > 0 && bpm <= 400 ? bpm : 100, notes: str(so.notes), sections, arrangement, updated: +so.updated || 0 };
 }
 
 /** Czyta plik kopii. Przyjmuje też surowy stan z prototypu ({songs:[...]}) albo samą tablicę piosenek. */
