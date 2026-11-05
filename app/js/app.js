@@ -98,7 +98,7 @@ function syncHTML(){
     <p class="sb-note sync-status" role="status">${status}</p>
     <div class="foot-btns">
       <button class="btn small ${s.needAuth?'primary':''}" data-act="sync-now" ${s.busy?'disabled':''}>${s.needAuth?'Zaloguj i synchronizuj':'Synchronizuj teraz'}</button>
-      <button class="btn small ghost" data-act="sync-off" ${s.busy?'disabled':''}>Odłącz</button>
+      <button class="btn small danger-text" data-act="sync-off" ${s.busy?'disabled':''}>Odłącz</button>
     </div></div>`;
 }
 
