@@ -221,6 +221,9 @@ function openAt(sid,i){
 
 function secCard(s,linked,used){
   const kp=ui.keypad;
+  // zakres kopiowania podświetlony w siatce taktów
+  const rs=kp&&kp.sid===s.id?kp.i:-1, re=rs<0?-1:rs+Math.min(kp.copy||1,s.bars-kp.i);
+  const inR=(a,b)=>rs>=0&&re-rs>1&&a<re&&b>rs;
   return `<article class="sec-card sc-${s.color} ${linked?'linked':''}" id="sec-${s.id}">
     <div class="sec-head">
       <button class="swatch" data-act="color" data-sid="${s.id}" aria-label="Zmień kolor sekcji" title="Zmień kolor"></button>
@@ -241,9 +244,9 @@ function secCard(s,linked,used){
       </div>
       <div class="bars">${barCells(s).map(c=>{
         if(c.type==='bar'){const v=s.chords[c.i]||'';
-          return `<button class="bar ${v.includes(' ')?'has-slots':''} ${kp&&kp.sid===s.id&&kp.i===c.i?'editing':''}" data-act="cell" data-sid="${s.id}" data-i="${c.i}" aria-label="Takt ${c.i+1}: ${v?esc(disp(v)):'pusty'}"><span class="bar-n">${c.i+1}</span>${barInner(v)}</button>`}
+          return `<button class="bar ${v.includes(' ')?'has-slots':''} ${kp&&kp.sid===s.id&&kp.i===c.i?'editing':''} ${inR(c.i,c.i+1)?'in-range':''}" data-act="cell" data-sid="${s.id}" data-i="${c.i}" aria-label="Takt ${c.i+1}: ${v?esc(disp(v)):'pusty'}"><span class="bar-n">${c.i+1}</span>${barInner(v)}</button>`}
         const n=c.to-c.from;
-        return `<button class="bar text-bar ${kp&&kp.sid===s.id&&kp.i===c.start?'editing':''}" style="grid-column:span ${n}" data-act="cell" data-sid="${s.id}" data-i="${c.start}" aria-label="Takty ${c.from+1}–${c.to}: ${esc(c.t)}"><span class="bar-n">${n>1?(c.from+1)+'–'+c.to:c.from+1}</span><span class="bar-t">${c.first?'':'… '}${esc(c.t)}</span></button>`;
+        return `<button class="bar text-bar ${kp&&kp.sid===s.id&&kp.i===c.start?'editing':''} ${inR(c.from,c.to)?'in-range':''}" style="grid-column:span ${n}" data-act="cell" data-sid="${s.id}" data-i="${c.start}" aria-label="Takty ${c.from+1}–${c.to}: ${esc(c.t)}"><span class="bar-n">${n>1?(c.from+1)+'–'+c.to:c.from+1}</span><span class="bar-t">${c.first?'':'… '}${esc(c.t)}</span></button>`;
       }).join('')}</div>
       <textarea id="sl-${s.id}" data-field="slyrics" data-sid="${s.id}" rows="2" placeholder="Tekst, uwagi do wykonania…" aria-label="Tekst i uwagi: ${esc(s.name)}">${esc(s.lyrics)}</textarea>
     </div>
@@ -320,10 +323,31 @@ function renderEditor(){
 }
 
 const MODS=[['#','♯'],['b','♭'],['m','m'],['7','7'],['maj7','maj7'],['m7','m7'],['sus2','sus2'],['sus4','sus4'],['dim','dim'],['aug','aug'],['6','6'],['9','9'],['add9','add9'],['5','5']];
-/* schowek taktu – zapamiętany na urządzeniu, działa między sekcjami i piosenkami */
+/* schowek taktów: blok kolejnych taktów {chords:[...], texts:{względnyTakt:{t,span}}}
+   – zapamiętany na urządzeniu, działa między sekcjami i piosenkami */
 const CLIP_LS='musicnotes.barClip';
-let clip=''; try{clip=localStorage.getItem(CLIP_LS)||''}catch(e){}
-const clipLabel=v=>getSlots(v).map(x=>x==='-'?'·':disp(x)).join(' ');
+let clip=null;
+try{const raw=localStorage.getItem(CLIP_LS); if(raw){try{clip=JSON.parse(raw)}catch(e){clip={chords:[raw],texts:{}}}}}catch(e){}
+if(clip&&!Array.isArray(clip.chords)) clip=null;
+const barLabel=v=>getSlots(v).map(x=>x==='-'?'·':disp(x)).join(' ');
+const clipLabel=c=>c.chords.length===1&&!c.texts[0]?barLabel(c.chords[0]):`${c.chords.length} ${plTakt(c.chords.length)}`;
+function copyBars(s,i,n){
+  const texts={};
+  for(const k in s.texts){const j=+k,t=s.texts[k]; if(j>=i&&j+t.span<=i+n) texts[j-i]={t:t.t,span:t.span}}
+  return {chords:s.chords.slice(i,i+n),texts};
+}
+/* wkleja blok od taktu i; brakujące takty dokłada na końcu sekcji (max 64); zwraca liczbę wklejonych */
+function pasteBars(s,i,c){
+  const n=Math.min(c.chords.length,64-i); if(n<=0) return 0;
+  while(s.bars<i+n){s.chords.push('');s.bars++}
+  for(const k in s.texts){const j=+k,t=s.texts[k];
+    if(j>=i&&j<i+n) delete s.texts[k];                 // tekst zaczynał się w zakresie – znika
+    else if(j<i&&j+t.span>i) t.span=i-j;               // tekst wchodził w zakres – skrócony
+  }
+  for(let k=0;k<n;k++) s.chords[i+k]=c.chords[k];
+  for(const k in c.texts){const r=+k,t=c.texts[k]; if(r<n) s.texts[i+r]={t:t.t,span:Math.min(t.span,n-r)}}
+  return n;
+}
 function renderKeypad(){
   const host=$('#keypad'), kp=ui.keypad;
   $('#main').classList.toggle('kp-pad',!!kp);
@@ -332,6 +356,17 @@ function renderKeypad(){
   const tx=s.texts[kp.i], step=kp.mode==='text'&&tx?tx.span:1;
   const sl=getSlots(s.chords[kp.i]||'');
   host.hidden=false;
+  const cspan=Math.min(kp.copy||1,s.bars-kp.i);
+  const hasContent=s.chords.slice(kp.i,kp.i+cspan).some(Boolean)||Object.keys(copyBars(s,kp.i,cspan).texts).length>0;
+  const clipRow=`<div class="clip-row">
+      <div class="stepper" title="Ile taktów kopiować, licząc od tego">
+        <button data-act="k-cspan" data-v="-1" ${cspan<=1?'disabled':''} aria-label="Kopiuj mniej taktów">−</button>
+        <span>${cspan}</span>
+        <button data-act="k-cspan" data-v="1" ${kp.i+cspan>=s.bars?'disabled':''} aria-label="Kopiuj więcej taktów">+</button>
+      </div>
+      <button class="k wide" data-act="k-copy" ${hasContent?'':'disabled'}>Kopiuj ${cspan>1?`${cspan} ${plTakt(cspan)}`:'takt'}</button>
+      <button class="k wide" data-act="k-paste" ${clip?'':'disabled'} title="Wkleja skopiowane takty od tego miejsca i przechodzi dalej">${clip?`Wklej <b class="mono">${esc(clipLabel(clip))}</b> ›`:'Wklej ›'}</button>
+    </div>`;
   const head=`<div class="sheet-head">
       <button class="btn" data-act="k-prev" ${kp.i===0?'disabled':''} aria-label="Poprzedni takt">‹ Takt</button>
       <div class="sheet-where"><span>${esc(s.name)} ·</span> ${step>1?`takty ${kp.i+1}–${kp.i+step}`:`takt ${kp.i+1}`} z ${s.bars}</div>
@@ -350,10 +385,7 @@ function renderKeypad(){
         return `<button class="k-slot ${j===kp.slot?'on':''} ${kp.fresh&&j===kp.slot&&has?'fresh':''}" data-act="k-slot" data-v="${j}" aria-label="Część ${j+1}">${sl.length>1?`<small>${j+1}</small>`:''}${has?esc(disp(x)):`<span class="bar-empty">${sl.length>1?'·':'pusty takt'}</span>`}</button>`}).join('')}</div>
     <div class="k-grid roots">${['C','D','E','F','G','A','B'].map(r=>`<button class="k root" data-act="k" data-v="${r}">${disp(r)}</button>`).join('')}</div>
     <div class="k-grid mods">${MODS.map(([v,l])=>`<button class="k" data-act="k" data-v="${v}">${l}</button>`).join('')}</div>
-    <div class="k-grid clip">
-      <button class="k wide" data-act="k-copy" ${s.chords[kp.i]?'':'disabled'}>Kopiuj takt</button>
-      <button class="k wide" data-act="k-paste" ${clip?'':'disabled'} title="Wkleja skopiowany takt i przechodzi do następnego">${clip?`Wklej <b class="mono">${esc(clipLabel(clip))}</b> ›`:'Wklej ›'}</button>
-    </div>
+    ${clipRow}
     <div class="k-grid acts">
       <button class="k wide" data-act="k" data-v="/">/ bas</button>
       <button class="k wide" data-act="k" data-v="%">% jak wyżej</button>
@@ -373,6 +405,7 @@ function renderKeypad(){
         <button data-act="k-span" data-v="1" ${span>=max?'disabled':''} aria-label="Więcej taktów">+</button>
       </div>
     </div>
+    ${clipRow}
     <div class="k-grid acts">
       <button class="k wide" data-act="k-deltext" ${tx?'':'disabled'}>Usuń tekst</button>
       <span></span>
@@ -598,11 +631,17 @@ document.addEventListener('click',e=>{
     case 'cell': ui.keypad=openAt(d.sid,+d.i); renderEditor(); renderKeypad(); scrollCell(); break;
     case 'k': kpPress(d.v); break;
     case 'k-back': ui.keypad.fresh=false; slotEdit(x=>{const t=x.match(TOK)||[]; if(t.join('')===x){t.pop(); return t.join('')} return x.slice(0,-1)}); break;
-    case 'k-copy': {const v=secOf(song,ui.keypad.sid).chords[ui.keypad.i]||''; if(!v) break;
-      clip=v; try{localStorage.setItem(CLIP_LS,v)}catch(e){} renderKeypad(); toast('Skopiowano takt: '+clipLabel(v)); break;}
+    case 'k-cspan': {const kp=ui.keypad, s=secOf(song,kp.sid);
+      kp.copy=Math.max(1,Math.min(s.bars-kp.i,(kp.copy||1)+(+d.v))); renderEditor(); renderKeypad(); break;}
+    case 'k-copy': {const kp=ui.keypad, s=secOf(song,kp.sid), n=Math.min(kp.copy||1,s.bars-kp.i);
+      clip=copyBars(s,kp.i,n); try{localStorage.setItem(CLIP_LS,JSON.stringify(clip))}catch(e){}
+      kp.copy=1; renderEditor(); renderKeypad();
+      toast(n===1&&!clip.texts[0]?'Skopiowano takt: '+barLabel(clip.chords[0]):`Skopiowano ${n} ${plTakt(n)} (od taktu ${kp.i+1})`); break;}
     case 'k-paste': {const kp=ui.keypad, s=secOf(song,kp.sid); if(!clip) break;
-      s.chords[kp.i]=clip; kp.fresh=true; kp.slot=0;
-      if(kp.i<s.bars-1&&textAt(s,kp.i+1)==null) kpGo(1); else kpSync(); renderList(); break;}
+      const before=s.bars, n=pasteBars(s,kp.i,clip), next=kp.i+n;
+      if(s.bars>before) toast(`Sekcja wydłużona do ${s.bars} ${plTakt(s.bars)}`);
+      // przejście za wklejony blok (jeśli sekcja się nie kończy)
+      ui.keypad=openAt(kp.sid,Math.min(next,s.bars-1)); kpSync(); scrollCell(); renderList(); break;}
     case 'k-clear': ui.keypad.fresh=false; ui.keypad.slot=0; kpEdit(()=>''); break;
     case 'k-div': {const n=+d.v; ui.keypad.fresh=false;
       kpEdit(v=>{let sl=getSlots(v); if(sl[0]==='%') sl=['']; while(sl.length<n) sl.push('-'); return joinSlots(sl.slice(0,n))});
